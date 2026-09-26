@@ -1,0 +1,116 @@
+# ------------------------------------------------------------------ 操作系统杂项
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+desktop.ini
+$RECYCLE.BIN/
+*.stackdump
+
+
+# ------------------------------------------------------------------- 编辑器 / IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+.idea/
+*.iml
+*.ipr
+*.iws
+.vim/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+.history/
+
+
+# --------------------------------------------------------------- 密钥 / 环境变量
+# 注意：这里挡的是「误提交」，不是「防泄漏」。
+# 已经 commit 进历史的密钥，加 .gitignore 是没用的，必须轮换密钥并清理历史。
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+credentials.json
+secrets.yaml
+secrets.yml
+
+
+# ------------------------------------------------------------------ 日志 / 临时
+*.log
+logs/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.tmp
+*.temp
+*.bak
+*.orig
+*.rej
+.cache/
+tmp/
+temp/
+
+
+# ------------------------------------------------------------ 构建产物 / 依赖目录
+# 库类项目（对外发包）有时需要提交 dist/，届时把下面两行注释掉即可。
+build/
+dist/
+out/
+target/
+bin/
+obj/
+node_modules/
+.venv/
+venv/
+env/
+
+
+# ---------------------------------------------------------------- 语言 / 工具缓存
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.coverage
+.coverage.*
+htmlcov/
+*.egg-info/
+.eggs/
+
+# Node / 前端
+.eslintcache
+.stylelintcache
+.parcel-cache/
+.turbo/
+.next/
+.nuxt/
+.svelte-kit/
+*.tsbuildinfo
+.yarn/cache/
+.pnp.*
+
+# 其他
+.gradle/
+.terraform/
+*.tfstate
+*.tfstate.*
+serverless/
+.aws-sam/
+
+
+.workbuddy/
+
