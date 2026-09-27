@@ -1,7 +1,6 @@
 import logging
 import time
 import uuid
-from starlette.middleware.base import BaseHTTPMiddleware
 from fastapi import FastAPI,Depends,Request
 from fastapi.responses import JSONResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -10,7 +9,7 @@ from app.core.config import settings
 from app.core.db import get_db
 from app.core.log import setup_logging
 from app.api import users
-from app.exceptions import DuplicateUsernameError
+from app.exceptions import DuplicateUsernameError, InvalidCredentialsError
 
 
 setup_logging(settings.log_level)
@@ -50,9 +49,9 @@ async def db_check(db: AsyncSession = Depends(get_db)) -> dict[str,str]:
 async def duplicate_username_handler(
         request: Request,exc: DuplicateUsernameError
 )->JSONResponse:
-    return JSONResponse(
-        status_code=409,
-        content={"detail": str(exc)},
-    )
+    return JSONResponse(status_code=409,content={"detail": str(exc)})
 
 
+@app.exception_handler(InvalidCredentialsError)
+async def invalid_credentials_handler(request: Request, exc: InvalidCredentialsError) -> JSONResponse:
+    return JSONResponse(status_code=401, content={"detail": str(exc)})
