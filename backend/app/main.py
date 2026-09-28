@@ -14,7 +14,13 @@ from app.exceptions import DuplicateUsernameError, InvalidCredentialsError
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
-app = FastAPI(title=settings.app_name,debug=settings.debug)
+app = FastAPI(
+    title=settings.app_name,
+    debug=settings.debug,
+    description="agents-interview项目后端",
+    version="0.1.0",
+)
+
 app.include_router(users.router)
 
 
@@ -31,16 +37,19 @@ async def request_logging(request: Request,call_next):
     response.headers["X-Request-ID"] = request_id
     return response
 
-@app.get("/health")
+@app.get("/health",tags=["运维"],
+         summary="健康检查")
 async def health_check() -> dict[str,str]:
     return {"status": "ok"}
 
 
-@app.get("/about")
+@app.get("/about",tags=["运维"],
+         summary="应用信息")
 async def about() -> dict[str,str]:
     return {"app": settings.app_name,"debug": str(settings.debug)}
 
-@app.get("/db-check")
+@app.get("/db-check",tags=["运维"],
+         summary="数据库连接检查")
 async def db_check(db: AsyncSession = Depends(get_db)) -> dict[str,str]:
     await db.execute(text("SELECT 1"))
     return {"status": "ok"}

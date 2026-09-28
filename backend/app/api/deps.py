@@ -6,10 +6,10 @@ from app.core.security import decode_access_token
 from app.models.user import User
 from app.services import user_service
 
-
-# FastAPI 的声明，本应用的 token 从 /users/login 接口获取
+# FastAPI 的声明，本应用的 token 从 /users/token 接口获取
 # OAuth2PasswordBearer 自动从请求头解析 Bearer xxx
-oauth_scheme = OAuth2PasswordBearer(tokenUrl="/users/login", auto_error=False)
+oauth_scheme = OAuth2PasswordBearer(tokenUrl="/users/token", auto_error=False)
+
 
 async def get_current_user(
         token: str = Depends(oauth_scheme),
