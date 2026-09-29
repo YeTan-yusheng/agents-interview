@@ -10,7 +10,7 @@ from app.core.db import get_db
 from app.core.log import setup_logging
 from app.api import users
 from app.exceptions import DuplicateUsernameError, InvalidCredentialsError
-
+from fastapi.middleware.cors import CORSMiddleware
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
@@ -19,6 +19,14 @@ app = FastAPI(
     debug=settings.debug,
     description="agents-interview项目后端",
     version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["http://localhost:5173"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 app.include_router(users.router)
