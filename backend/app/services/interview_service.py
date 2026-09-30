@@ -1,0 +1,90 @@
+import logging
+import time
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.exceptions import InterviewNotFoundError
+from app.models.interview import Interview, Message
+from app.core.llm import client
+from app.core.config import settings
+from app.exceptions import llmError
+
+logger = logging.getLogger(__name__)
+
+ROLE_INTERVIEWER = "interviewer"
+ROLE_CANDIDATE = "candidate"
+
+SYSTEM_PROMPT = (
+    "你是一位资深的技术面试官。根据应聘方向提出一个真实的面试问题，"
+    "只输出问题本身，不要解释，不要编号。"
+)
+
+
+async def start_interview(db: AsyncSession, user_id: int, topic: str) -> Interview:
+    interview = Interview(user_id=user_id, topic=topic)
+    db.add(interview)
+    await db.flush()
+
+    question = await generate_question(topic)
+    message = Message(interview_id=interview.id, role=ROLE_INTERVIEWER, content=question)
+    db.add(message)
+
+    await db.commit()
+    await db.refresh(interview, attribute_names=["messages"])
+
+    logger.info("面试开始 id=%s user_id=%s topic=%s", interview.id, user_id, topic)
+    return interview
+
+
+async def get_interview(db: AsyncSession, interview_id: int, user_id: int) -> Interview:
+    interview = await db.scalar(
+        select(Interview)
+        .options(selectinload(Interview.messages))
+        .where(
+            Interview.id == interview_id,
+            Interview.user_id == user_id,
+        )
+    )
+    if not interview:
+        raise InterviewNotFoundError()
+    return interview
+
+
+async def list_interviews(db: AsyncSession, user_id: int) -> list[Interview]:
+    interviews = await db.execute(
+        select(Interview)
+        .options(selectinload(Interview.messages))
+        .where(Interview.user_id == user_id)
+    )
+
+    interviews_list = interviews.scalars().all()
+    return interviews_list
+
+
+
+async def generate_question(topic: str) -> str:
+    start = time.perf_counter()
+
+    try:
+        resp = await client.chat.completions.create(
+            model=settings.llm_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": f"应聘方向：{topic}"}
+            ],
+            temperature=0.7,
+        )
+    except Exception as exc:
+        logger.error("LLM 调用失败 topic=%s error=%s", topic, exc)
+        raise llmError() from exc
+
+    duration_ms = (time.perf_counter() - start) * 1000
+    question = resp.choices[0].message.content or ""
+    usage = resp.usage
+    logger.info(
+        "出题成功 topic=%s model=%s %.0fms total_tokens=%s",
+        topic, settings.llm_model, duration_ms,
+        usage.total_tokens if usage else "?",
+    )
+    return question.strip()
