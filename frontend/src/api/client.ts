@@ -1,13 +1,21 @@
+let onUnauthorized: (() => void) | null = null;
+
+export function setUnauthorizedHandler(fn: () => void) {
+  onUnauthorized = fn;
+}
+
+
 const BASE_URL = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
 export class ApiError extends Error {
-  constructor(
-    public status: number,
-    message: string,
-  ) {
+  status: number;
+
+  constructor(status: number, message: string) {
     super(message);
+    this.status = status;
   }
 }
+
 
 export async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const res = await fetch(`${BASE_URL}${path}`, {
@@ -19,6 +27,9 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
   });
 
   if (!res.ok) {
+    if (res.status === 401) {
+      onUnauthorized?.();          // 有注册就执行，没注册跳过（?. 的作用）
+    }
     let detail = `请求失败: ${res.status}`;
     try {
       const body = await res.json();
