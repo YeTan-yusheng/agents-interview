@@ -3,14 +3,6 @@ from datetime import datetime
 from pydantic import BaseModel, Field
 
 
-class QuestionRequest(BaseModel):
-    topic: str = Field(min_length=2, max_length=50, examples=["Python 后端开发"])
-
-
-class QuestionOut(BaseModel):
-    question: str
-
-
 class InterviewCreate(BaseModel):
     topic: str = Field(min_length=2, max_length=50, examples=["Python 后端开发"])
 

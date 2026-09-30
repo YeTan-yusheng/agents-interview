@@ -1,11 +1,10 @@
-from fastapi import APIRouter, Request, Depends
+from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.schemas.interview import QuestionOut, QuestionRequest
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.services import interview_service
-from app.schemas.interview import InterviewOut, InterviewCreate, MessageOut
+from app.schemas.interview import InterviewOut, InterviewCreate
 
 router = APIRouter(prefix="/interview", tags=["面试"])
 
@@ -40,14 +39,3 @@ async def list_interviews(
 ) -> list[InterviewOut]:
     """获取用户所有面试会话（需要登录）。"""
     return await interview_service.list_interviews(db, current_user.id)
-
-
-@router.post("/generate_question", response_model=QuestionOut,
-             summary="根据应聘方向生成一个面试问题（需要登录）。")
-async def generate_question(
-        payload: QuestionRequest,
-        current_user: User = Depends(get_current_user),
-) -> QuestionOut:
-    """根据应聘方向生成一个面试问题（需要登录）。"""
-    question = await interview_service.generate_question(payload.topic)
-    return QuestionOut(question=question)
