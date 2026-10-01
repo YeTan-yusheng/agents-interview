@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.agents.interview_graph import turn_graph
 from app.exceptions import InterviewNotFoundError, InterviewCloseError
 from app.models.interview import Interview, Message, STATUS_COMPLETED, STATUS_ONGOING
 from app.core.llm import client
@@ -14,8 +15,6 @@ logger = logging.getLogger(__name__)
 
 ROLE_INTERVIEWER = "interviewer"
 ROLE_CANDIDATE = "candidate"
-
-
 
 SYSTEM_PROMPT = (
     "你是一位资深的技术面试官，正在进行一场多轮技术面试。"
@@ -37,7 +36,7 @@ async def start_interview(db: AsyncSession, user_id: int, topic: str) -> Intervi
     db.add(message)
 
     await db.commit()
-    await db.refresh(interview, attribute_names=["messages"])
+    await db.refresh(interview, attribute_names=["messages","created_at"])
 
     logger.info("面试开始 id=%s user_id=%s topic=%s", interview.id, user_id, topic)
     return interview
@@ -103,49 +102,33 @@ async def answer_interview(db: AsyncSession, interview_id: int, user_id: int, co
 
     round_no = sum(1 for m in interview.messages if m.role == ROLE_CANDIDATE) + 1
 
+    # 加载历史消息
+    history = [
+        {"role": "assistant" if i.role == ROLE_INTERVIEWER else "user", "content": i.content}
+        for i in interview.messages[-MAX_HISTORY:]
+    ]
+
+    state = await turn_graph.ainvoke({
+        "history": history,
+        "answer": content,
+        "round_no": round_no,
+        "max_rounds": settings.max_rounds,
+        "follow_up": "",
+        "finished": False,
+    })
+
     db.add(Message(interview_id=interview_id, role=ROLE_CANDIDATE, content=content))
 
-    if round_no >= settings.max_rounds:
+    if state["finished"]:
         interview.status = STATUS_COMPLETED
-        await db.commit()
-        await db.refresh(interview, attribute_names=["messages"])
-        logger.info("面试答满 %d 轮，结束 id=%s", settings.max_rounds, interview_id)
-        return interview
-
-    def to_llm_role(role: str) -> str:
-        return "assistant" if role == ROLE_INTERVIEWER else "user"
-
-    # 加载历史消息
-    llm_messages = [{"role": "system", "content": SYSTEM_PROMPT}]
-    llm_messages += [{
-        "role": to_llm_role(i.role), "content": i.content
-    } for i in interview.messages[-MAX_HISTORY:]]
-    # 加入最新消息
-    llm_messages.append({"role": "user", "content": content})
-
-    start = time.perf_counter()
-
-    try:
-        resp = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=llm_messages,
-            temperature=0.7,
-        )
-    except Exception as exc:
-        logger.error("LLM追问失败 id=%s error=%s", interview_id, exc)
-        raise llmError() from exc
-
-    follow_up = resp.choices[0].message.content or ""
-    logger.info(
-        "追问成功 id=%s %.0fms total_tokens=%s",
-        interview_id, (time.perf_counter() - start) * 1000, resp.usage.total_tokens if resp.usage else "?",
-    )
-
-    db.add(Message(interview_id=interview_id, role=ROLE_INTERVIEWER, content=follow_up.strip()))
+    else:
+        db.add(Message(interview_id=interview_id, role=ROLE_INTERVIEWER, content=state["follow_up"]))
 
     await db.commit()
     await db.refresh(interview, attribute_names=["messages"])
+    logger.info("回答处理完成 id=%s round=%d finished=%s", interview_id, round_no, state["finished"])
     return interview
+
 
 async def finish_interview(db: AsyncSession, interview_id: int, user_id: int) -> Interview:
     interview = await get_interview(db, interview_id, user_id)
