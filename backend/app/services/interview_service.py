@@ -15,6 +15,8 @@ logger = logging.getLogger(__name__)
 ROLE_INTERVIEWER = "interviewer"
 ROLE_CANDIDATE = "candidate"
 
+
+
 SYSTEM_PROMPT = (
     "你是一位资深的技术面试官，正在进行一场多轮技术面试。"
     "根据对话历史和候选人的最新回答继续面试："
@@ -96,8 +98,19 @@ async def generate_question(topic: str) -> str:
 async def answer_interview(db: AsyncSession, interview_id: int, user_id: int, content: str) -> Interview:
     interview = await get_interview(db, interview_id, user_id)
     if interview.status != STATUS_ONGOING:
-        logger.error("拒绝回答，面试已经结束 id=%s", interview_id)
+        logger.warning("拒绝回答，面试已经结束 id=%s", interview_id)
         raise InterviewCloseError()
+
+    round_no = sum(1 for m in interview.messages if m.role == ROLE_CANDIDATE) + 1
+
+    db.add(Message(interview_id=interview_id, role=ROLE_CANDIDATE, content=content))
+
+    if round_no >= settings.max_rounds:
+        interview.status = STATUS_COMPLETED
+        await db.commit()
+        await db.refresh(interview, attribute_names=["messages"])
+        logger.info("面试答满 %d 轮，结束 id=%s", settings.max_rounds, interview_id)
+        return interview
 
     def to_llm_role(role: str) -> str:
         return "assistant" if role == ROLE_INTERVIEWER else "user"
@@ -128,9 +141,18 @@ async def answer_interview(db: AsyncSession, interview_id: int, user_id: int, co
         interview_id, (time.perf_counter() - start) * 1000, resp.usage.total_tokens if resp.usage else "?",
     )
 
-    db.add(Message(interview_id=interview_id, role=ROLE_CANDIDATE, content=content))
     db.add(Message(interview_id=interview_id, role=ROLE_INTERVIEWER, content=follow_up.strip()))
 
+    await db.commit()
+    await db.refresh(interview, attribute_names=["messages"])
+    return interview
+
+async def finish_interview(db: AsyncSession, interview_id: int, user_id: int) -> Interview:
+    interview = await get_interview(db, interview_id, user_id)
+    if interview.status != STATUS_ONGOING:
+        logger.warning("面试已经结束 id=%s", interview_id)
+        raise InterviewCloseError()
+    interview.status = STATUS_COMPLETED
     await db.commit()
     await db.refresh(interview, attribute_names=["messages"])
     return interview

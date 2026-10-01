@@ -52,3 +52,13 @@ async def answer_interview(
     """提交回答并获得面试官的追问（需要登录）。"""
     return await interview_service.answer_interview(db, interview_id, current_user.id, payload.content)
 
+
+@router.post("/{interview_id}/finish")
+async def finish_interview(
+        interview_id: int,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+) -> InterviewOut:
+    """结束面试（需要登录）。"""
+    return await interview_service.finish_interview(db, interview_id, current_user.id)
+
