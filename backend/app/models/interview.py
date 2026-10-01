@@ -5,6 +5,7 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.models.base import Base
 
 STATUS_ONGOING = "ongoing"
+STATUS_COMPLETED = "completed"
 
 
 class Interview(Base):

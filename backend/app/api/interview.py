@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
 from app.services import interview_service
-from app.schemas.interview import InterviewOut, InterviewCreate
+from app.schemas.interview import InterviewOut, InterviewCreate,AnswerCreate
 
 router = APIRouter(prefix="/interview", tags=["面试"])
 
@@ -39,3 +39,16 @@ async def list_interviews(
 ) -> list[InterviewOut]:
     """获取用户所有面试会话（需要登录）。"""
     return await interview_service.list_interviews(db, current_user.id)
+
+
+@router.post("/{interview_id}/answer",response_model=InterviewOut,
+             summary="提交回答并获得面试官的追问（需要登录）。")
+async def answer_interview(
+        interview_id: int,
+        payload: AnswerCreate,
+        current_user: User = Depends(get_current_user),
+        db: AsyncSession = Depends(get_db),
+) -> InterviewOut:
+    """提交回答并获得面试官的追问（需要登录）。"""
+    return await interview_service.answer_interview(db, interview_id, current_user.id, payload.content)
+

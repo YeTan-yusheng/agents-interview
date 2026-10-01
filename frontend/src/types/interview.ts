@@ -16,3 +16,7 @@ export interface InterviewOut {
 export interface InterviewCreate {
   topic: string;
 }
+
+export interface AnswerCreate {
+  content: string;
+}

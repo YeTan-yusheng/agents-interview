@@ -24,3 +24,7 @@ class InterviewOut(BaseModel):
     messages: list[MessageOut] = []
 
     model_config = {"from_attributes": True}
+
+
+class AnswerCreate(BaseModel):
+    content: str = Field(min_length=1,max_length=2000,examples=["索引是把查询从全表扫描优化为树查找"])

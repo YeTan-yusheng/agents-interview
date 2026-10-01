@@ -15,7 +15,8 @@ from app.exceptions import (
     DuplicateUsernameError,
     InvalidCredentialsError,
     llmError,
-    InterviewNotFoundError
+    InterviewNotFoundError,
+    InterviewCloseError,
 )
 
 setup_logging(settings.log_level)
@@ -90,3 +91,8 @@ async def llm_error_handler(request: Request, exc: llmError) -> JSONResponse:
 @app.exception_handler(InterviewNotFoundError)
 async def interview_not_found_handler(request: Request, exc: InterviewNotFoundError) -> JSONResponse:
     return JSONResponse(status_code=404, content={"detail": str(exc)})
+
+
+@app.exception_handler(InterviewCloseError)
+async def interview_close_error_handler(request: Request, exc: InterviewCloseError) -> JSONResponse:
+    return JSONResponse(status_code=409, content={"detail": str(exc)})

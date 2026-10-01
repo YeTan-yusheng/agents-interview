@@ -17,3 +17,7 @@ class llmError(Exception):
 class InterviewNotFoundError(Exception):
     def __init__(self) -> None:
         super().__init__("面试不存在")
+
+class InterviewCloseError(Exception):
+    def __init__(self) -> None:
+        super().__init__("这场面试已经结束了")
