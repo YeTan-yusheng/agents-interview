@@ -4,7 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from app.agents.interview_graph import turn_graph
+from app.agents.interview_graph import turn_graph, generate_evaluation
 from app.exceptions import InterviewNotFoundError, InterviewCloseError
 from app.models.interview import Interview, Message, STATUS_COMPLETED, STATUS_ONGOING
 from app.core.llm import client
@@ -121,6 +121,7 @@ async def answer_interview(db: AsyncSession, interview_id: int, user_id: int, co
 
     if state["finished"]:
         interview.status = STATUS_COMPLETED
+        interview.evaluation = state["evaluation"]
     else:
         db.add(Message(interview_id=interview_id, role=ROLE_INTERVIEWER, content=state["follow_up"]))
 
@@ -135,7 +136,17 @@ async def finish_interview(db: AsyncSession, interview_id: int, user_id: int) ->
     if interview.status != STATUS_ONGOING:
         logger.warning("面试已经结束 id=%s", interview_id)
         raise InterviewCloseError()
+
+    history = [
+        {"role": "assistant" if i.role == ROLE_INTERVIEWER else "user", "content": i.content}
+        for i in interview.messages[-MAX_HISTORY:]
+    ]
+
     interview.status = STATUS_COMPLETED
+    interview.evaluation = await generate_evaluation(history)
+
+
     await db.commit()
     await db.refresh(interview, attribute_names=["messages"])
+    logger.info("面试完成 id=%s user_id=%s evaluation=%s", interview_id, user_id, interview.evaluation)
     return interview

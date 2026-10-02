@@ -10,6 +10,7 @@ export interface InterviewOut {
   topic: string;
   status: string;
   created_at: string;
+  evaluation: string | null;   // 新增：整场结束后的总评
   messages: MessageOut[];
 }
 
@@ -19,4 +20,13 @@ export interface InterviewCreate {
 
 export interface AnswerCreate {
   content: string;
+}
+
+export interface InterviewOut {
+  id: number;
+  topic: string;
+  status: string;
+  created_at: string;
+  evaluation: string | null;   // 新增：整场结束后的总评
+  messages: MessageOut[];
 }

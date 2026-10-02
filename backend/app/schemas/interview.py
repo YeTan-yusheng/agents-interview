@@ -22,6 +22,7 @@ class InterviewOut(BaseModel):
     status: str
     created_at: datetime
     messages: list[MessageOut] = []
+    evaluation: str | None = None
 
     model_config = {"from_attributes": True}
 

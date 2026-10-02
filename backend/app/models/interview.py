@@ -16,6 +16,7 @@ class Interview(Base):
     topic: Mapped[str] = mapped_column(String(50))
     status: Mapped[str] = mapped_column(String(16), default=STATUS_ONGOING)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    evaluation: Mapped[str | None] = mapped_column(Text)
 
     messages: Mapped[list["Message"]] = relationship(
         back_populates="interview", order_by="Message.id"
