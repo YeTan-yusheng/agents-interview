@@ -3,11 +3,12 @@ import time
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
+from langchain_core.messages import HumanMessage, SystemMessage
 
 from app.agents.interview_graph import get_turn_graph, generate_evaluation
 from app.exceptions import InterviewNotFoundError, InterviewCloseError
 from app.models.interview import Interview, Message, STATUS_COMPLETED, STATUS_ONGOING
-from app.core.llm import client
+from app.core.llm import get_model
 from app.core.config import settings
 from app.exceptions import llmError
 
@@ -92,26 +93,17 @@ async def generate_question(topic: str) -> str:
     start = time.perf_counter()
 
     try:
-        resp = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": f"应聘方向：{topic}"}
-            ],
-            temperature=0.7,
-        )
+        resp = await get_model().ainvoke([
+            SystemMessage(content=SYSTEM_PROMPT),
+            HumanMessage(content=f"应聘方向：{topic}"),
+        ])
     except Exception as exc:
         logger.error("LLM 调用失败 topic=%s error=%s", topic, exc)
         raise llmError() from exc
 
     duration_ms = (time.perf_counter() - start) * 1000
-    question = resp.choices[0].message.content or ""
-    usage = resp.usage
-    logger.info(
-        "出题成功 topic=%s model=%s %.0fms total_tokens=%s",
-        topic, settings.llm_model, duration_ms,
-        usage.total_tokens if usage else "?",
-    )
+    question =( resp.content or "").strip()
+
     return question.strip()
 
 

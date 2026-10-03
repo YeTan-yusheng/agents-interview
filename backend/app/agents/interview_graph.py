@@ -1,9 +1,10 @@
 import logging
 from typing import TypedDict
 from langgraph.graph import END, START, StateGraph
+from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 
 from app.core.config import settings
-from app.core.llm import client
+from app.core.llm import get_model
 from app.exceptions import llmError
 
 logger = logging.getLogger(__name__)
@@ -36,20 +37,17 @@ class InterviewTurnState(TypedDict):
 
 
 async def ask_llm(state: InterviewTurnState) -> dict:
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT},
-        *state["history"],
-    ]
+    messages = [SystemMessage(content=SYSTEM_PROMPT)]
+    for m in state["history"]:
+        cls = AIMessage if m["role"] == "assistant" else HumanMessage
+        messages.append(cls(content=m["content"]))
+
     try:
-        resp = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=messages,
-            temperature=0.7,
-        )
+        resp = await get_model().ainvoke(messages)
     except Exception as exc:
         raise llmError() from exc
 
-    follow_up = (resp.choices[0].message.content or "").strip()
+    follow_up = (resp.content or "").strip()
     return {"follow_up": follow_up,
             "history": [*state["history"], {"role": "assistant", "content": follow_up}]}
 
@@ -64,16 +62,17 @@ def route_by_round(state: InterviewTurnState) -> str:
 
 async def generate_evaluation(messages: list[dict]) -> str:
     """能力函数：给一份完整对话，返回总评文本。与图无关，谁都能调。"""
+    msgs = [SystemMessage(content=SCORER_PROMPT)]
+    for m in messages:
+        cls = AIMessage if m["role"] == "assistant" else HumanMessage
+        msgs.append(cls(content=m["content"]))
+
     try:
-        resp = await client.chat.completions.create(
-            model=settings.llm_model,
-            messages=[{"role": "system", "content": SCORER_PROMPT}, *messages],
-            temperature=0.3,
-        )
+        resp = await get_model().bind(temperature=0.3).ainvoke(msgs)
     except Exception as exc:
         raise llmError() from exc
 
-    return (resp.choices[0].message.content or "").strip()
+    return (resp.content or "").strip()
 
 
 async def score(state: InterviewTurnState) -> dict:
