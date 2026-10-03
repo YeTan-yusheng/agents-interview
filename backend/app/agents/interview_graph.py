@@ -39,7 +39,6 @@ async def ask_llm(state: InterviewTurnState) -> dict:
     messages = [
         {"role": "system", "content": SYSTEM_PROMPT},
         *state["history"],
-        {"role": "user", "content": state["answer"]},
     ]
     try:
         resp = await client.chat.completions.create(
@@ -50,7 +49,9 @@ async def ask_llm(state: InterviewTurnState) -> dict:
     except Exception as exc:
         raise llmError() from exc
 
-    return {"follow_up": (resp.choices[0].message.content or "").strip()}
+    follow_up = (resp.choices[0].message.content or "").strip()
+    return {"follow_up": follow_up,
+            "history": [*state["history"], {"role": "assistant", "content": follow_up}]}
 
 
 def finish(state: InterviewTurnState) -> dict:
@@ -77,8 +78,27 @@ async def generate_evaluation(messages: list[dict]) -> str:
 
 async def score(state: InterviewTurnState) -> dict:
     """适配器：从 state 取材料、拼完整对话，能力交给 generate_evaluation。"""
-    messages = [*state["history"],{"role":"user","content":state["answer"]}]
+    messages = [*state["history"]]
     return {"evaluation": await generate_evaluation(messages)}
+
+
+def ingest(state: InterviewTurnState) -> dict:
+    """入口节点：把本次回答记入历史，轮数+1"""
+    return {
+        "history": [*state["history"], {"role": "user", "content": state["answer"]}],
+        "round_no": state["round_no"] + 1,
+    }
+
+
+def seed(state: InterviewTurnState) -> dict:
+    """种子节点：输入 state 已在输入阶段写入通道，这里无需产出，
+    存在的意义只是让 checkpointer 把初始状态落一盘。"""
+    return {}
+
+
+def route_entry(state: InterviewTurnState) -> str:
+    """有回答 → ingest；没回答（种子调用）→ seed。"""
+    return "ingest" if state.get("answer") else "seed"
 
 
 def build_turn_graph():
@@ -86,15 +106,27 @@ def build_turn_graph():
     graph.add_node("ask_llm", ask_llm)
     graph.add_node("finish", finish)
     graph.add_node("score", score)
-    graph.add_conditional_edges(
-        START,
-        route_by_round,
-        {"ask_llm": "ask_llm", "finish": "finish"}
-    )
+    graph.add_node("ingest", ingest)
+    graph.add_node("seed", seed)
+    graph.add_conditional_edges(START, route_entry, {"seed": "seed", "ingest": "ingest"})
+    graph.add_conditional_edges("ingest", route_by_round, {"ask_llm": "ask_llm", "finish": "finish"})
+    graph.add_edge("seed", END)
     graph.add_edge("ask_llm", END)
     graph.add_edge("finish", "score")
     graph.add_edge("score", END)
     return graph
 
 
-turn_graph = build_turn_graph().compile()
+_turn_graph = None
+
+
+async def init_turn_graph(saver) -> None:
+    """lifespan 启动时调用：把 saver 的生命周期交给应用。"""
+    global _turn_graph
+    _turn_graph = build_turn_graph().compile(checkpointer=saver)
+
+
+def get_turn_graph():
+    if _turn_graph is None:
+        raise ValueError("turn_graph 未初始化，请先调用 init_turn_graph")
+    return _turn_graph

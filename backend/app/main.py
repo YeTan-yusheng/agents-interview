@@ -6,7 +6,10 @@ from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
+from contextlib import asynccontextmanager
+from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
+from app.agents.interview_graph import init_turn_graph
 from app.core.config import settings
 from app.core.db import get_db
 from app.core.log import setup_logging
@@ -21,11 +24,21 @@ from app.exceptions import (
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as saver:
+        await init_turn_graph(saver)
+        yield
+
+
 app = FastAPI(
     title=settings.app_name,
     debug=settings.debug,
     description="agents-interview项目后端",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

@@ -110,6 +110,7 @@ htmlcov/
 *.tfstate.*
 serverless/
 .aws-sam/
+checkpoints.db*
 
 
 .workbuddy/
