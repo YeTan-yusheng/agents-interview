@@ -28,5 +28,7 @@ function doLogout() {
   <button @click="doLogout">退出登录</button>
   <p>{{ message }}</p>
   <RouterLink to="/about">关于</RouterLink>
+  <br>
+  <RouterLink to="/interview">面试</RouterLink>
 
 </template>

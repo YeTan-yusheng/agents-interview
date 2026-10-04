@@ -14,8 +14,8 @@ export function login(data: LoginRequest): Promise<TokenResponse> {
   return request<TokenResponse>("/users/login", { method: "POST", body: JSON.stringify(data) });
 }
 
-export function fetchMe(token: string): Promise<User> {
-  return request<User>("/users/me", { headers: { Authorization: `Bearer ${token}` } });
+export function fetchMe(): Promise<User> {
+  return request<User>("/users/me");
 }
 
 export function listUsers(): Promise<User[]> {

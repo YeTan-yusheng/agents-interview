@@ -4,6 +4,19 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn;
 }
 
+/** 流式路径等绕过 request 的调用点，手动触发全局 401 行为（登出+跳登录）。 */
+export function handleUnauthorized() {
+  onUnauthorized?.();
+}
+
+
+export const TOKEN_KEY = "access_token";
+
+
+export function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem(TOKEN_KEY);
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
 
 const BASE_URL = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
@@ -22,6 +35,7 @@ export async function request<T>(path: string, options: RequestInit = {}): Promi
     ...options,
     headers: {
       "Content-Type": "application/json",
+      ...authHeaders(),
       ...(options.headers ?? {}),
     },
   });

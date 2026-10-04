@@ -2,9 +2,7 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 import type { TokenResponse, User } from '../types/user';
 import { login as loginApi, fetchMe } from '../api/user';
-
-
-const TOKEN_KEY = "access_token";
+import { TOKEN_KEY } from '../api/client';
 
 export const useAuthStore = defineStore('auth', () => {
     const token = ref<string | null>(localStorage.getItem(TOKEN_KEY));
@@ -19,7 +17,7 @@ export const useAuthStore = defineStore('auth', () => {
     async function loadMe(){
         if (!token.value) 
             return;
-        user.value = await fetchMe(token.value);
+        user.value = await fetchMe();
     }
 
     function logout() {

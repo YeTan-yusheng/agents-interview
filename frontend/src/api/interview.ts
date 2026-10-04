@@ -1,30 +1,19 @@
 import type {InterviewCreate, InterviewOut, AnswerCreate, InterviewStreamEvent} from "../types/interview.ts";
-import {ApiError, request} from "./client.ts";
+import {ApiError, request, authHeaders, handleUnauthorized} from "./client.ts";
 
-export function startInterview(data: InterviewCreate, token: string): Promise<InterviewOut> {
+export function startInterview(data: InterviewCreate): Promise<InterviewOut> {
   return request<InterviewOut>("/interview", {
     method: "POST",
     body: JSON.stringify(data),
-    headers: { Authorization: `Bearer ${token}` },
   });
 }
 
-export function fetchInterview(id: number, token: string): Promise<InterviewOut> {
-  return request<InterviewOut>(`/interview/${id}`, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export function fetchInterview(id: number): Promise<InterviewOut> {
+  return request<InterviewOut>(`/interview/${id}`);
 }
 
-export function submitAnswer(
-  interviewId: number,
-  data: AnswerCreate,
-  token: string,
-): Promise<InterviewOut> {
-  return request<InterviewOut>(`/interview/${interviewId}/answer`, {
-    method: "POST",
-    body: JSON.stringify(data),
-    headers: { Authorization: `Bearer ${token}` },
-  });
+export function listInterviews(): Promise<InterviewOut[]> {
+  return request<InterviewOut[]>("/interview");
 }
 
 
@@ -37,11 +26,14 @@ export async function streamAnswer(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${localStorage.getItem("access_token") ?? ""}`,
+      ...authHeaders(),
     },
     body: JSON.stringify({ content } satisfies AnswerCreate),
   });
-  if (!resp.ok || !resp.body) throw new ApiError(resp.status, "请求失败");   // 按你 ApiError 实际签名调
+  if (!resp.ok || !resp.body) {
+    if (resp.status === 401) handleUnauthorized();   // 流式路径手动接回全局拦截（登出+跳登录）
+    throw new ApiError(resp.status, "请求失败");
+  }
 
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
