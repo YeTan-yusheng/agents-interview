@@ -3,6 +3,7 @@ uvicorn==0.54.0
 pydantic-settings==2.15.0
 sqlalchemy==2.1.1
 asyncmy==0.2.15
+cryptography==50.0.2
 bcrypt==5.0.0
 pyjwt==2.15.0
 pytest==9.1.1

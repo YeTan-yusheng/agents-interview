@@ -1,5 +1,7 @@
+import json
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
+from fastapi.responses import StreamingResponse
 
 from app.api.deps import get_current_user, get_db
 from app.models.user import User
@@ -41,16 +43,23 @@ async def list_interviews(
     return await interview_service.list_interviews(db, current_user.id)
 
 
-@router.post("/{interview_id}/answer",response_model=InterviewOut,
+@router.post("/{interview_id}/answer",
              summary="提交回答并获得面试官的追问（需要登录）。")
 async def answer_interview(
         interview_id: int,
         payload: AnswerCreate,
         current_user: User = Depends(get_current_user),
         db: AsyncSession = Depends(get_db),
-) -> InterviewOut:
+):
     """提交回答并获得面试官的追问（需要登录）。"""
-    return await interview_service.answer_interview(db, interview_id, current_user.id, payload.content)
+    interview = await interview_service.get_interview(db, interview_id, current_user.id)
+    interview_service.assert_ongoing(interview)
+
+    async def sse():
+        async for chunk in interview_service.stream_answer(db, interview, payload.content):
+            yield f"data: {json.dumps(chunk, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(sse(), media_type="text/event-stream")
 
 
 @router.post("/{interview_id}/finish")

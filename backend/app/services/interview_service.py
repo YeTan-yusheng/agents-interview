@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from langchain_core.messages import HumanMessage, SystemMessage
+from collections.abc import AsyncIterator
 
 from app.agents.interview_graph import get_turn_graph, generate_evaluation
 from app.exceptions import InterviewNotFoundError, InterviewCloseError
@@ -11,6 +12,7 @@ from app.models.interview import Interview, Message, STATUS_COMPLETED, STATUS_ON
 from app.core.llm import get_model
 from app.core.config import settings
 from app.exceptions import llmError
+from app.schemas.interview import InterviewOut
 
 logger = logging.getLogger(__name__)
 
@@ -102,35 +104,37 @@ async def generate_question(topic: str) -> str:
         raise llmError() from exc
 
     duration_ms = (time.perf_counter() - start) * 1000
-    question =( resp.content or "").strip()
+    question = (resp.content or "").strip()
 
     return question.strip()
 
 
-async def answer_interview(db: AsyncSession, interview_id: int, user_id: int, content: str) -> Interview:
-    interview = await get_interview(db, interview_id, user_id)
-    if interview.status != STATUS_ONGOING:
-        logger.warning("拒绝回答，面试已经结束 id=%s", interview_id)
-        raise InterviewCloseError()
-
+async def stream_answer(db: AsyncSession, interview: Interview, content: str) -> AsyncIterator[dict]:
+    """流式回答面试"""
     graph = get_turn_graph()
-    cfg = {"configurable": {"thread_id": str(interview_id)}}
+    cfg = {"configurable": {"thread_id": str(interview.id)}}
 
-    snap = await graph.aget_state(cfg)
-    if not snap.values:
-        history = [
-            {"role": "assistant" if i.role == ROLE_INTERVIEWER else "user", "content": i.content} for i in
-            interview.messages[-MAX_HISTORY:]
-        ]
+    try:
+        async for event in graph.astream_events({"answer": content, }, config=cfg, version="v2"):
+            if event["event"] != "on_chat_model_stream":
+                continue
+            if event.get("metadata", {}).get("langgraph_node") != "ask_llm":
+                continue
 
-        round_no = sum(1 for i in interview.messages if i.role == ROLE_CANDIDATE)
-        await graph.ainvoke({
-            "history": history, "answer": "",
-            "round_no": round_no, "max_rounds": settings.max_rounds,
-            "follow_up": "", "finished": False, "evaluation": "",
-        }, config=cfg)
+            delta = getattr(event["data"].get("chunk"), "content", "")
+            if isinstance(delta, str) and delta:
+                yield {"type": "token", "content": delta}
 
-    state = await graph.ainvoke({"answer": content, }, config=cfg)
+    except Exception as exc:
+        logger.exception("回答流式执行失败 id=%s", interview.id)
+        if isinstance(exc, llmError):
+            yield {"type": "error", "message": str(exc)}
+        else:
+            yield {"type": "error", "message": f"面试服务内部错误（{type(exc).__name__}），请稍后重试"}
+        return
+
+    # 终态从事实源读
+    state = (await graph.aget_state(cfg)).values
 
     sync_projection(db, interview, state["history"])
 
@@ -140,8 +144,7 @@ async def answer_interview(db: AsyncSession, interview_id: int, user_id: int, co
 
     await db.commit()
     await db.refresh(interview, attribute_names=["messages"])
-    logger.info("回答处理完成 id=%s finished=%s", interview_id, state["finished"])
-    return interview
+    yield {"type": "end", "interview": InterviewOut.model_validate(interview).model_dump(mode="json")}
 
 
 async def finish_interview(db: AsyncSession, interview_id: int, user_id: int) -> Interview:
@@ -162,3 +165,9 @@ async def finish_interview(db: AsyncSession, interview_id: int, user_id: int) ->
     await db.refresh(interview, attribute_names=["messages"])
     logger.info("面试完成 id=%s user_id=%s evaluation=%s", interview_id, user_id, interview.evaluation)
     return interview
+
+
+def assert_ongoing(interview: Interview) -> None:
+    if interview.status != STATUS_ONGOING:
+        logger.warning("面试已经结束 id=%s", interview.id)
+        raise InterviewCloseError()
