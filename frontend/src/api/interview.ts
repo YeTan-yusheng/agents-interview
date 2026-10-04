@@ -1,5 +1,5 @@
 import type {InterviewCreate, InterviewOut, AnswerCreate, InterviewStreamEvent} from "../types/interview.ts";
-import {ApiError, request, authHeaders, handleUnauthorized} from "./client.ts";
+import {ApiError, request, authHeaders, handleUnauthorized, BASE_URL} from "./client.ts";
 
 export function startInterview(data: InterviewCreate): Promise<InterviewOut> {
   return request<InterviewOut>("/interview", {
@@ -22,7 +22,7 @@ export async function streamAnswer(
   content: string,
   onEvent: (ev: InterviewStreamEvent) => void,
 ): Promise<void> {
-  const resp = await fetch(`${import.meta.env.VITE_API_BASE}/interview/${interviewId}/answer`, {
+  const resp = await fetch(`${BASE_URL}/interview/${interviewId}/answer`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",

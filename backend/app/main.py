@@ -1,9 +1,9 @@
 import logging
+import os
 import time
 import uuid
 from fastapi import FastAPI, Depends, Request
 from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import text
 from contextlib import asynccontextmanager
@@ -11,7 +11,7 @@ from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
 
 from app.agents.interview_graph import init_turn_graph
 from app.core.config import settings
-from app.core.db import get_db
+from app.core.db import get_db, engine
 from app.core.log import setup_logging
 from app.api import users, interview
 from app.exceptions import (
@@ -21,6 +21,7 @@ from app.exceptions import (
     InterviewNotFoundError,
     InterviewCloseError,
 )
+from app.models.base import Base
 
 setup_logging(settings.log_level)
 logger = logging.getLogger(__name__)
@@ -28,7 +29,12 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with AsyncSqliteSaver.from_conn_string("checkpoints.db") as saver:
+    import app.models
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+
+    os.makedirs("data",exist_ok=True)
+    async with AsyncSqliteSaver.from_conn_string("data/checkpoints.db") as saver:
         await init_turn_graph(saver)
         yield
 
@@ -41,16 +47,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
-app.include_router(users.router)
-app.include_router(interview.router)
+app.include_router(users.router, prefix="/api")
+app.include_router(interview.router, prefix="/api")
 
 
 @app.middleware("http")

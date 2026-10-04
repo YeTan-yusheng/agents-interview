@@ -112,6 +112,6 @@ serverless/
 .aws-sam/
 checkpoints.db*
 
-
+data/
 .workbuddy/
 

@@ -1,0 +1,69 @@
+# 一条命令起全栈：MySQL + 后端 + 前端
+#
+#   在根目录建 .env（见下）→ docker compose up -d --build
+#   浏览器打开 http://localhost:8080
+#
+# 根 .env 供容器编排；backend/.env 供本机直跑——两套互不影响。
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: agents_interview_mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在根目录 .env 里设置 MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: agents_interview        # 首次启动自动建库
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_unicode_ci
+    # 刻意不映射宿主机 3306：本机已有 MySQL，抢端口直接把栈干挂
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-p$$MYSQL_ROOT_PASSWORD"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  backend:
+    build:
+      context: ./backend
+      args:
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-https://pypi.org/simple}
+    container_name: agents_interview_backend
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      # 容器内连服务名 mysql，不是 localhost
+      DATABASE_URL: mysql+asyncmy://root:${MYSQL_ROOT_PASSWORD}@mysql:3306/agents_interview
+      JWT_SECRET: ${JWT_SECRET:?请在根目录 .env 里生成 JWT_SECRET}
+      LLM_API_KEY: ${LLM_API_KEY:?请在根目录 .env 里设置 LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL:?请在根目录 .env 里设置 LLM_BASE_URL}
+      LLM_MODEL: ${LLM_MODEL:-qwen1.5-72b-chat}
+      MAX_ROUNDS: ${MAX_ROUNDS:-3}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      TZ: Asia/Shanghai
+    volumes:
+      - checkpoint_data:/app/data     # checkpoints.db：重建容器不丢流程状态
+    ports:
+      # 错开 8000：本机直跑占着 8000；这里映射回环只供调试 Swagger
+      - "127.0.0.1:18000:8000"
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NPM_REGISTRY: ${NPM_REGISTRY:-https://registry.npmjs.org}
+    container_name: agents_interview_frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "8080:80"
+    restart: unless-stopped
+
+volumes:
+  mysql_data:
+  checkpoint_data:

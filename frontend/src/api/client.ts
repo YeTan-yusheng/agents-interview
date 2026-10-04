@@ -1,3 +1,5 @@
+export const BASE_URL = "/api";
+
 let onUnauthorized: (() => void) | null = null;
 
 export function setUnauthorizedHandler(fn: () => void) {
@@ -18,7 +20,6 @@ export function authHeaders(): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
-const BASE_URL = import.meta.env.VITE_API_BASE ?? "http://127.0.0.1:8000";
 
 export class ApiError extends Error {
   status: number;

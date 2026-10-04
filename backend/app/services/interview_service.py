@@ -6,7 +6,7 @@ from sqlalchemy.orm import selectinload
 from langchain_core.messages import HumanMessage, SystemMessage
 from collections.abc import AsyncIterator
 
-from app.agents.interview_graph import get_turn_graph, generate_evaluation
+from app.agents.interview_graph import get_turn_graph, generate_evaluation, SYSTEM_PROMPT
 from app.exceptions import InterviewNotFoundError, InterviewCloseError
 from app.models.interview import Interview, Message, STATUS_COMPLETED, STATUS_ONGOING
 from app.core.llm import get_model
@@ -18,13 +18,6 @@ logger = logging.getLogger(__name__)
 
 ROLE_INTERVIEWER = "interviewer"
 ROLE_CANDIDATE = "candidate"
-
-SYSTEM_PROMPT = (
-    "你是一位资深的技术面试官，正在进行一场多轮技术面试。"
-    "根据对话历史和候选人的最新回答继续面试："
-    "回答含糊或浅显就追问细节，回答扎实就换角度深入或提出新问题。"
-    "只输出面试官的下一句话，不要解释，不要复述候选人的回答。"
-)
 
 MAX_HISTORY = 20
 
