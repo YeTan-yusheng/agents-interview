@@ -26,6 +26,7 @@ async function doLogin() {
   <input v-model="password" type="password" placeholder="密码" />
   <button @click="doLogin">登录</button>
   <p>{{ message }}</p>
+  <RouterLink to="/register">没有账号？去注册</RouterLink>
 </template>
 
 
