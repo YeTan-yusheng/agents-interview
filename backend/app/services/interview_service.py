@@ -107,6 +107,25 @@ async def stream_answer(db: AsyncSession, interview: Interview, content: str) ->
     graph = get_turn_graph()
     cfg = {"configurable": {"thread_id": str(interview.id)}}
 
+    # 老对话补种
+    snap = await graph.aget_state(cfg)
+
+    if not snap.values:
+        history = [
+            {"role": "assistant" if m.role == ROLE_INTERVIEWER else "user", "content": m.content}
+            for m in interview.messages[-MAX_HISTORY:]
+        ]
+        round_no = sum(1 for m in interview.messages if m.role == ROLE_CANDIDATE)
+        await graph.ainvoke({
+            "history": history,
+            "answer": "",
+            "round_no": round_no,
+            "max_rounds": settings.max_rounds,
+            "follow_up": "",
+            "finished": False,
+            "evaluation": "",
+        }, config=cfg)
+
     try:
         async for event in graph.astream_events({"answer": content, }, config=cfg, version="v2"):
             if event["event"] != "on_chat_model_stream":
