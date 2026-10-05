@@ -4,6 +4,7 @@ import router from "./router";
 import App from "./App.vue";
 import { useAuthStore } from "./stores/auth";
 import { setUnauthorizedHandler } from "./api/client";
+import "./style.css";
 
 
 const app = createApp(App);
